@@ -1,70 +1,94 @@
-# 변동성(Volatility)과 내재변동성(IV) — 정의와 도출
+# 1. 변동성(Volatility)과 내재변동성(IV) — 정의와 도출
 
 > FE_Volatility_Surface 팀 발표 | 담당: sunny  
 > 참고: Hull, *Options, Futures, and Other Derivatives* 11e, Chapter 20
 
 ---
 
-## 발표 구성 개요
+## 목차
 
-| 순서 | 소제목 | 핵심 메시지 |
-|------|--------|-------------|
-| 1 | 왜 변동성이 중요한가 | BSM의 단 하나의 비관측 파라미터 |
-| 2 | 역사적 변동성(HV) 정의와 계산 | 과거 수익률 표준편차 |
-| 3 | BSM 모형과 변동성의 역할 | 모든 옵션 가격은 σ의 함수 |
-| 4 | 내재변동성(IV) 정의와 역산 도출 | 시장가격 → BSM 역함수 → IV |
-| 5 | Put-Call Parity와 IV 일치성 | 동일 행사가/만기: IV_call = IV_put |
-| 6 | 변동성 스마일과 변동성 표면 | IV가 행사가·만기에 따라 달라지는 현실 |
-| 7 | 팀 연구로의 연결 | KOSPI200 skew / calendar / VRP 전략의 이론적 토대 |
+1. 변동성이란 무엇인가
+2. 역사적 변동성(Historical Volatility) 정의와 계산
+3. BSM 모형과 변동성의 역할
+4. 내재변동성(Implied Volatility) 정의와 역산 도출
+5. Put-Call Parity와 IV 일치성 증명
 
 ---
 
-## 1. 왜 변동성이 중요한가
+## 1. 변동성이란 무엇인가
 
-- BSM 공식 `c = S₀N(d₁) - Ke^{-rT}N(d₂)` 에서 **유일한 비관측(non-observable) 파라미터**가 σ
-- S₀, K, r, T는 직접 관찰되지만, 미래 변동성은 알 수 없음
-- 따라서 옵션 시장의 핵심 질문: **"시장은 σ를 어떻게 가격에 반영하는가?"**
+변동성(Volatility, σ)은 자산 수익률의 불확실성 크기를 나타내는 척도이다.
+
+- 좁은 의미: 자산 로그수익률의 **표준편차** (연환산)
+- 넓은 의미: 시장 참여자들이 미래의 가격 불확실성에 부여하는 **가격(price)**
+
+옵션 가격결정에서 변동성이 핵심인 이유는 단순하다.  
+BSM 공식에서 **직접 관측 불가능한 파라미터가 σ 하나뿐**이기 때문이다.
+
+| 파라미터 | 관측 가능 여부 |
+|---------|--------------|
+| S₀ (현재 자산가격) | ✅ 직접 관측 |
+| K (행사가) | ✅ 계약 조건 |
+| r (무위험이자율) | ✅ 시장 금리 |
+| T (잔존만기) | ✅ 계약 조건 |
+| **σ (변동성)** | ❌ **관측 불가 — 추정해야 함** |
 
 ---
 
-## 2. 역사적 변동성(Realized Volatility, RV) 정의
+## 2. 역사적 변동성(Historical Volatility, HV)
 
-### 수식 정의
+### 정의
 
-일별 로그수익률:
+과거 가격 데이터로부터 수익률의 표준편차를 구하는 방법이다.
+
+**Step 1.** 일별 로그수익률 계산:
 
 $$r_t = \ln\left(\frac{S_t}{S_{t-1}}\right)$$
 
-N일 Rolling RV (연환산):
+**Step 2.** N일 Rolling 분산 → 연환산 표준편차:
 
-$$\text{RV}_t = \sqrt{\frac{252}{N} \sum_{i=1}^{N} r_{t-i}^2}$$
+$$\text{HV}_t = \sqrt{\frac{252}{N-1} \sum_{i=1}^{N} (r_{t-i} - \bar{r})^2}$$
 
-> **코드 연결**: `data.py`의 `load_spot()` 함수가 20일 Rolling RV를 정확히 이 방식으로 계산
+실무에서는 평균 수익률을 0으로 근사해 단순화하는 경우가 많다:
+
+$$\text{RV}_t \approx \sqrt{\frac{252}{N} \sum_{i=1}^{N} r_{t-i}^2}$$
 
 ### 한계
-- **과거** 데이터 기반 → 미래 변동성 ≠ 과거 변동성
-- 변동성이 일정하다는 BSM 가정과 충돌 (실제로는 변동성 클러스터링, 점프 존재)
+
+- **후행(lagging) 지표** — 과거 기반이므로 미래 변동성과 다를 수 있음
+- BSM의 상수 변동성 가정과 충돌: 실제 시장에서 변동성은 시간에 따라 변하고 클러스터링된다
 
 ---
 
-## 3. BSM 모형에서 변동성의 역할
+## 3. BSM 모형과 변동성의 역할
 
-### Black-76 (선물 옵션 버전, 본 연구에서 사용)
+### Black-Scholes-Merton 공식 (주식 옵션)
+
+$$c = S_0 N(d_1) - Ke^{-rT} N(d_2)$$
+
+$$d_1 = \frac{\ln(S_0/K) + (r + \sigma^2/2)T}{\sigma\sqrt{T}}, \quad d_2 = d_1 - \sigma\sqrt{T}$$
+
+### Black-76 공식 (선물 옵션 — 본 팀 연구에서 사용)
 
 $$c = e^{-rT}\left[F\,N(d_1) - K\,N(d_2)\right]$$
 
-$$d_1 = \frac{\ln(F/K) + \frac{1}{2}\sigma^2 T}{\sigma\sqrt{T}}, \quad d_2 = d_1 - \sigma\sqrt{T}$$
+$$d_1 = \frac{\ln(F/K) + \frac{1}{2}\sigma^2 T}{\sigma\sqrt{T}}$$
 
-- **σ가 클수록** 옵션 가격 상승 (vega > 0)
-- 모형은 σ = 상수를 가정 → 모든 행사가·만기에 **동일한 σ**를 사용
+### σ의 역할
 
-### BSM의 핵심 가정 (현실과의 괴리)
+- σ가 클수록 옵션 가격 상승 → **Vega(ν) = ∂c/∂σ > 0** 항상 성립
+- 따라서 옵션 가격과 σ 사이에 **단조증가(monotone) 관계** 가 성립함
+- 이 성질이 IV 역산의 근거가 된다
+
+### BSM의 핵심 가정과 현실의 괴리
 
 | BSM 가정 | 현실 |
 |---------|------|
-| σ = 상수 | 변동성 클러스터링, regime 변화 |
-| 가격이 연속적으로 움직임 | 갭, 점프 빈번 |
-| 자산 수익률 ~ Lognormal | 두꺼운 꼬리(fat tail), 음의 skewness |
+| σ = 상수 | 변동성 클러스터링, 레짐 변화 |
+| 가격 변화가 연속적 | 갭·점프 빈번 |
+| 수익률 ~ 정규분포 | 두꺼운 꼬리, 음의 비대칭 |
+
+이 괴리 때문에 실무 트레이더는 **행사가·만기마다 다른 σ**를 사용한다. → 이것이 바로 IV다.
 
 ---
 
@@ -72,101 +96,66 @@ $$d_1 = \frac{\ln(F/K) + \frac{1}{2}\sigma^2 T}{\sigma\sqrt{T}}, \quad d_2 = d_1
 
 ### 정의
 
-> **IV란, 시장에서 관측된 옵션 가격을 BSM 공식에 대입했을 때 역으로 산출되는 σ값이다.**
+> **IV란, 시장에서 관측된 옵션 가격(c_market)을 BSM 공식에 역대입했을 때 산출되는 σ값이다.**
 
 $$c_{\text{market}} = \text{BSM}(\sigma_{\text{imp}}) \quad \Longrightarrow \quad \sigma_{\text{imp}} = \text{BSM}^{-1}(c_{\text{market}})$$
 
-### 왜 해석적 역함수가 없는가?
+### 왜 해석적(closed-form) 역함수가 없는가
 
-BSM은 σ에 대해 **단조증가(monotone increasing)** 이지만 폐형식(closed-form) 역함수가 존재하지 않음.  
-→ Newton-Raphson 수치 반복법으로 풀어야 함:
+BSM 공식의 N(d₁), N(d₂)는 정규분포 CDF를 포함하고 있어, σ에 대한 **폐형식 역함수가 존재하지 않는다.**
+
+### Newton-Raphson 수치 역산 (실무 표준)
+
+단조증가 함수의 역함수를 수치적으로 구한다:
 
 $$\sigma^{(n+1)} = \sigma^{(n)} - \frac{c_{\text{BSM}}(\sigma^{(n)}) - c_{\text{market}}}{\mathcal{V}(\sigma^{(n)})}$$
 
-여기서 $\mathcal{V} = \partial c / \partial \sigma$ (vega).
+여기서 $\mathcal{V} = \partial c / \partial \sigma$ (Vega).
+
+**수렴 조건**: Vega > 0 (단조증가)이므로 해가 반드시 존재하고 수렴이 빠르다. (보통 5회 이내)
 
 ### IV의 경제적 의미
 
-- IV는 **시장이 현재 시점에서 기대하는 미래 변동성의 가격**
-- IV > RV → 시장이 미래를 더 불확실하게 봄 (변동성 리스크 프리미엄, VRP > 0)
-- IV < RV → 시장이 과거보다 미래를 낙관적으로 봄 (이번 연구 샘플 기간이 이 케이스)
+| 관계 | 해석 |
+|------|------|
+| **IV > RV** | 시장이 미래를 더 불확실하게 봄 → 변동성 리스크 프리미엄(VRP) > 0 |
+| **IV < RV** | 시장이 실제보다 낙관적 → VRP < 0 (이번 연구 샘플 기간이 이 케이스) |
+| **IV 자체** | 특정 행사가·만기에 대한 시장의 불확실성 가격 |
 
 ---
 
 ## 5. Put-Call Parity와 IV 일치성 (Hull §20.1)
 
-### Put-Call Parity
+### Put-Call Parity (무배당 기준)
 
 $$p + S_0 e^{-qT} = c + Ke^{-rT}$$
 
+이 관계는 lognormal 가정 없이 **무차익거래 논리만으로** 성립한다.
+
 ### IV 일치 증명
 
-BSM이 put-call parity를 만족하면:
+BSM도 put-call parity를 만족하므로:
+
+$$p_{\text{BSM}} + S_0 e^{-qT} = c_{\text{BSM}} + Ke^{-rT}$$
+
+시장도 put-call parity를 만족하므로:
+
+$$p_{\text{mkt}} + S_0 e^{-qT} = c_{\text{mkt}} + Ke^{-rT}$$
+
+두 식을 빼면:
 
 $$p_{\text{BSM}} - p_{\text{mkt}} = c_{\text{BSM}} - c_{\text{mkt}}$$
 
-따라서 특정 σ에서 `c_BSM = c_mkt`이면 동시에 `p_BSM = p_mkt`  
+따라서 어떤 σ에서 `c_BSM = c_mkt` (즉, call의 IV) 이면 자동으로 `p_BSM = p_mkt` (즉, put의 IV가 같음):
 
-$$\boxed{\sigma_{\text{imp}}^{\text{call}} = \sigma_{\text{imp}}^{\text{put}} \quad \text{(동일 K, T)}}$$
+$$\boxed{\sigma_{\text{imp}}^{\text{call}} = \sigma_{\text{imp}}^{\text{put}} \quad \text{(동일 K, T에서 항상 성립)}}$$
 
-**실용적 의미**: Volatility smile/surface를 논할 때 콜/풋 구분 없이 단일 IV 곡면으로 표현 가능
+### 실용적 의미
 
----
-
-## 6. 변동성 스마일과 변동성 표면
-
-### 현실에서 IV가 일정하지 않은 이유
-
-BSM의 lognormal 가정이 틀렸기 때문:
-
-| 시장 | 실제 분포의 특징 | 결과적 IV 패턴 |
-|------|----------------|----------------|
-| **주식/지수** (KOSPI200 포함) | 좌측 꼬리가 두꺼움 (음의 skewness) | IV가 낮은 행사가(OTM put)일수록 높음 → **하향 skew** |
-| **FX** | 양쪽 꼬리 모두 두꺼움 (높은 kurtosis) | 양끝 행사가에서 IV 높음 → **U자형 smile** |
-
-### 주식/지수 음의 skew 원인 (Hull §20.3)
-
-1. **레버리지 효과**: 주가 하락 → 부채비율 증가 → 변동성 증가
-2. **Volatility Feedback**: 변동성 증가 → 요구수익률 증가 → 주가 추가 하락
-3. **Crashophobia**: 1987년 블랙먼데이 이후 투자자들이 OTM put에 과도한 프리미엄 부여
-
-### 변동성 표면 (Volatility Surface)
-
-$$\sigma_{\text{imp}} = \sigma(K/S_0, \, T)$$
-
-| K/S₀ | 1M | 3M | 6M | 1Y | 2Y |
-|-------|----|----|----|----|-----|
-| 0.90 | 높음 | ↓ | ↓ | ↓ | ↓ |
-| 1.00 | 낮음 | — | — | — | — |
-| 1.10 | 낮음 | ↑ | ↑ | ↑ | ↑ |
-
-- 만기가 길수록 smile의 기울기(skew)는 완만해짐 → 점프·변동성 변화의 시간평균 효과
-- 실무: 이 표에서 보간(interpolation)하여 임의 옵션에 적용
+- 콜과 풋을 구분하지 않고 **단일 IV 곡면**으로 시장을 묘사할 수 있다
+- Volatility smile/surface는 콜·풋 중 어느 것으로 계산해도 동일한 결과를 줌
+- 만약 실제 시장에서 `IV_call ≠ IV_put` 이라면 → **무차익거래 기회** 존재
 
 ---
 
-## 7. 팀 연구와의 연결
-
-| Hull 이론 개념 | kwangjin 코드 구현 |
-|--------------|-------------------|
-| IV 역산 (Newton-Raphson) | `pricing.py` bs76() → IV smile 구축 |
-| Volatility smile (행사가별 IV) | `data.py` smile 보간, `indicators.py` IV(90%)/IV(110%) 비율 |
-| IV skew = 음의 skew 존재 | `strategies.py` Skew Builder: skew z-score로 시그널 |
-| VRP = IV - RV 차이 | `indicators.py` VRP 계산, `strategies.py` VRP Builder |
-| Volatility term structure | `strategies.py` Calendar Builder: 근/원월 ATM IV 차이 |
-| Volatility surface (K, T) | 전체 연구의 관심 대상 — KOSPI200 월물 변동성 표면 |
-
-> 요약: 이론적으로 IV가 행사가·만기에 따라 달라지는 이유(분포의 비대칭·두꺼운 꼬리)를  
-> 통계적으로 포착해 **skew mean-reversion**에 베팅하는 것이 팀 전략의 핵심이다.
-
----
-
-## 발표 시 강조 포인트
-
-1. **IV는 "미래 변동성의 시장 가격"** — 단순한 수치가 아니라 시장의 기대와 두려움이 담긴 정보
-2. **BSM은 보간 도구** — Hull §20.7: 트레이더들은 BSM을 이미 잘못됐다는 걸 알면서도 일관성 있는 인터폴레이션 도구로 사용
-3. **IV smile의 형태 → 내재 확률분포** — Breeden-Litzenberger: $g(K) = e^{rT} \frac{\partial^2 c}{\partial K^2}$ 로 시장이 가정하는 리스크중립분포 추출 가능
-
----
-
-*참고문헌: Hull (2022), Chapter 20; Breeden & Litzenberger (1978)*
+*참고문헌: Hull (2022), Chapter 20 §20.1; Breeden & Litzenberger (1978)*
