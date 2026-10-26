@@ -36,6 +36,9 @@ def compute_metrics(equity, trades, detail=None) -> dict:
     wins   = [t for t in eff if t > 0]
     losses = [t for t in eff if t < 0]
     holds  = [d[4] for d in detail] if detail else []
+    causes = [d[5] for d in detail] if detail and len(detail[0]) > 5 else []
+    n_stop_z   = causes.count("STOP_Z")
+    n_stop_pnl = causes.count("STOP_PNL")
     return dict(
         total_return_pct  = 100 * total,
         ann_return_pct    = 100 * ann_ret,
@@ -52,6 +55,8 @@ def compute_metrics(equity, trades, detail=None) -> dict:
         worst_trade_pct   = (100 * min(eff))               if eff else float("nan"),
         profit_factor     = (sum(wins) / abs(sum(losses))) if losses else float("nan"),
         avg_hold_days     = (st.mean(holds))               if holds else float("nan"),
+        n_stop_z          = n_stop_z,
+        n_stop_pnl        = n_stop_pnl,
     )
 
 
