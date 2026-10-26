@@ -141,6 +141,8 @@ def print_comparison(results: list[dict]) -> None:
         ("평균거래",     [f"{m['avg_trade_pct']:+.3f} %p"      for m in ms]),
         ("최악거래",     [f"{m['worst_trade_pct']:+.3f} %p"    for m in ms]),
         ("평균보유",     [f"{m['avg_hold_days']:.1f} 일"       for m in ms]),
+        ("손절(z-stop)", [f"{m.get('n_stop_z', 0)} 건"         for m in ms]),
+        ("손절(pnl)",    [f"{m.get('n_stop_pnl', 0)} 건"       for m in ms]),
     ]
     if all("nw_t" in m for m in ms):
         data.append(("NW t통계량", [f"{m['nw_t']:+.3f}" for m in ms]))
@@ -190,7 +192,8 @@ def main():
     plot_vrp_dist(rows, out_dir)
     plot_term_structure(rows, out_dir)
 
-    base = Params(z_exit=0.3, max_hold=15, rehedge=True, cost_iv_pt=0.5)
+    base = Params(z_exit=0.3, max_hold=15, rehedge=True, cost_iv_pt=0.5,
+                  stop_dz=2.0, stop_loss_pct=5.0)
     strategies = [
         ("VRP 전략 (Short/Long ATM 스트래들, 양방향)",  "04_VRP_양방향",   vrp_builder),
         ("Short Volatility 전략 (VRP 수취, 매도 전용)", "05_Short_Vol",    shortvol_builder),
