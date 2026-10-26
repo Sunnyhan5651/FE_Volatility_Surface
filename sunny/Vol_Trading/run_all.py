@@ -84,23 +84,76 @@ def run_strategy(name: str, tag: str, builder, rows, rows_by_date,
                 metrics_same=m_same, metrics_next=m_next)
 
 
-def print_metrics(name: str, m: dict):
-    print(f"\n{'─'*55}")
-    print(f"  {name}")
-    print(f"{'─'*55}")
-    print(f"  누적수익률   {m['total_return_pct']:+7.2f} %p")
-    print(f"  연환산수익률 {m['ann_return_pct']:+7.2f} %p")
-    print(f"  연환산변동성 {m['ann_vol_pct']:7.2f} %p")
-    print(f"  Sharpe       {m['sharpe']:+7.3f}")
-    print(f"  MDD          {m['mdd_pct']:7.2f} %p  ({m['mdd_days']}일)")
-    print(f"  Calmar       {m['calmar']:+7.3f}" if m['calmar'] == m['calmar'] else "  Calmar          nan")
-    print(f"  유효거래수   {m['effective_trades']:5d} 건")
-    print(f"  승률         {m['win_rate_pct']:6.1f} %")
-    print(f"  평균거래     {m['avg_trade_pct']:+6.3f} %p")
-    print(f"  최악거래     {m['worst_trade_pct']:+6.3f} %p")
-    print(f"  평균보유     {m['avg_hold_days']:5.1f} 일")
-    if "nw_t" in m:
-        print(f"  NW t통계량   {m['nw_t']:+7.3f}  (일별 평균 {m['nw_mean_daily_pct']:+.4f} %p)")
+_CJK_RANGES = (
+    (0xAC00, 0xD7A3), (0x1100, 0x11FF), (0x3130, 0x318F),
+    (0x4E00, 0x9FFF), (0x3400, 0x4DBF),
+)
+
+
+def _wlen(s: str) -> int:
+    """터미널 표시 너비 (한글/CJK = 2, 나머지 = 1)."""
+    return sum(2 if any(lo <= ord(c) <= hi for lo, hi in _CJK_RANGES) else 1
+               for c in s)
+
+
+def _pad(s: str, w: int, align: str = "<") -> str:
+    p = max(0, w - _wlen(s))
+    if align == "<":  return s + " " * p
+    if align == ">":  return " " * p + s
+    left = p // 2;    return " " * left + s + " " * (p - left)   # ^
+
+
+def _nf(v: float, fmt: str) -> str:
+    if v != v: return "N/A"          # NaN
+    try:       return fmt % v
+    except (OverflowError, ValueError): return "N/A"
+
+
+def print_comparison(results: list[dict]) -> None:
+    """세 전략 성과 지표를 나란히 비교 출력."""
+    ms    = [r["metrics_same"] for r in results]
+    heads = ["VRP 양방향", "Short Vol", "Long Vol"]
+
+    WL, WV = 14, 13  # 라벨 / 값 열 표시 너비
+
+    def hline(l: str, m: str, r: str) -> str:
+        return l + "─" * (WL + 2) + (m + "─" * (WV + 2)) * 3 + r
+
+    def row(label: str, *vals: str) -> str:
+        return ("│ " + _pad(label, WL) + " │ "
+                + " │ ".join(_pad(v, WV, ">") for v in vals) + " │")
+
+    def hrow(label: str, *vals: str) -> str:
+        return ("│ " + _pad(label, WL) + " │ "
+                + " │ ".join(_pad(v, WV, "^") for v in vals) + " │")
+
+    TOTAL = 4 + WL + (WV + 3) * 3
+    data = [
+        ("누적수익률",   [f"{m['total_return_pct']:+.2f} %p"  for m in ms]),
+        ("연환산수익률", [f"{m['ann_return_pct']:+.2f} %p"    for m in ms]),
+        ("연환산변동성", [f"{m['ann_vol_pct']:.2f} %p"        for m in ms]),
+        ("Sharpe",       [f"{m['sharpe']:+.3f}"               for m in ms]),
+        ("MDD",          [f"{m['mdd_pct']:.2f} %p"            for m in ms]),
+        ("MDD 기간",     [f"{m['mdd_days']} 일"               for m in ms]),
+        ("Calmar",       [_nf(m["calmar"], "%+.3f")            for m in ms]),
+        ("유효거래수",   [f"{m['effective_trades']} 건"        for m in ms]),
+        ("승률",         [f"{m['win_rate_pct']:.1f} %"         for m in ms]),
+        ("평균거래",     [f"{m['avg_trade_pct']:+.3f} %p"      for m in ms]),
+        ("최악거래",     [f"{m['worst_trade_pct']:+.3f} %p"    for m in ms]),
+        ("평균보유",     [f"{m['avg_hold_days']:.1f} 일"       for m in ms]),
+    ]
+    if all("nw_t" in m for m in ms):
+        data.append(("NW t통계량", [f"{m['nw_t']:+.3f}" for m in ms]))
+
+    print(f"\n\n{'═' * TOTAL}")
+    print(f"  전략별 성과 비교  (당일 체결 · 앙상블 평균)")
+    print(f"{'═' * TOTAL}")
+    print(hline("┌", "┬", "┐"))
+    print(hrow("지표", *heads))
+    print(hline("├", "┼", "┤"))
+    for label, vals in data:
+        print(row(label, *vals))
+    print(hline("└", "┴", "┘"))
 
 
 def main():
@@ -145,12 +198,15 @@ def main():
     ]
 
     results = []
-    for name, tag, builder in strategies:
-        print(f"\n[백테스트] {name}")
+    for i, (name, tag, builder) in enumerate(strategies, 1):
+        print(f"\n[백테스트 {i}/{len(strategies)}] {name} ...")
         res = run_strategy(name, tag, builder, rows, rows_by_date,
                            smiles_by_day, dates, base)
         results.append(res)
-        print_metrics(name + " (당일 체결, 앙상블)", res["metrics_same"])
+        print(f"  완료  누적수익률 {res['metrics_same']['total_return_pct']:+.2f} %p"
+              f"  Sharpe {res['metrics_same']['sharpe']:+.3f}")
+
+    print_comparison(results)
 
     print("\n[그림 4-7] 전략별 손익 곡선 저장 중...")
     plot_strategy_equity(results, dates, out_dir)
