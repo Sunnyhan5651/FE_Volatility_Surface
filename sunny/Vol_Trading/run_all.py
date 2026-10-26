@@ -107,8 +107,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data-dir", default=None, help="데이터 폴더 경로")
-    ap.add_argument("--out",      default="results")
-    ap.add_argument("--cache",    default=".cache")
+    ap.add_argument("--out",      default=str(_HERE / "results"))
+    ap.add_argument("--cache",    default=str(_HERE / ".cache"))
     ap.add_argument("--no-cache", action="store_true")
     args = ap.parse_args()
 
@@ -156,7 +156,7 @@ def main():
     plot_strategy_equity(results, dates, out_dir)
     plot_summary(results, dates, out_dir)
 
-    print(f"\n실행 완료: {time.time() - t0:.0f}초  |  결과 폴더: {out_dir.resolve()}")
+    print(f"\n실행 완료: {time.time() - t0:.0f}초  |  결과 폴더: {out_dir.absolute()}")
 
 
 if __name__ == "__main__":
