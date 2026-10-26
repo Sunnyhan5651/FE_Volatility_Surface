@@ -26,11 +26,14 @@ from voltrading.signals  import compute_indicators, rolling_z, robust_z
 from voltrading.strategies import vrp_builder, longvol_builder, shortvol_builder
 
 
-# ── 데이터 경로 후보 ──────────────────────────────────────
+# ── 데이터 경로 후보 (스크립트 위치 기준 절대경로로 탐색) ──
+_HERE = Path(__file__).parent.resolve()
+
 DATA_CANDIDATES = [
-    "../../../minjae",          # 레포 내 minjae 폴더
-    "../../minjae",
-    "data",
+    _HERE / "data",                        # 스크립트 옆 data/ 폴더 (최우선)
+    _HERE / "../../../minjae",             # 레포 내 minjae 폴더
+    _HERE / "../../minjae",
+    Path("data"),                          # 현재 작업 디렉터리의 data/
 ]
 
 
@@ -38,7 +41,7 @@ def find_data_dir(cli_arg: str | None) -> str:
     if cli_arg:
         return cli_arg
     for c in DATA_CANDIDATES:
-        p = Path(c)
+        p = Path(c).resolve()
         if (p / "kospi200_spot.csv").exists() or (p / "kospi200_options_regular.csv.gz").exists():
             return str(p)
     raise FileNotFoundError(
