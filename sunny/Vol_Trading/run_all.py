@@ -158,6 +158,44 @@ def print_comparison(results: list[dict]) -> None:
     print(hline("└", "┴", "┘"))
 
 
+def print_yearly(results: list[dict], dates: list) -> None:
+    """연도별 손익 분해 테이블."""
+    years = sorted({d[:4] for d in dates})
+    short_names = [r["name"].split()[0] for r in results]
+    WY, WV = 6, 13
+
+    def hline(l, m, r):
+        return l + "─" * (WY + 2) + (m + "─" * (WV + 2)) * len(results) + r
+
+    def row(label, *vals):
+        return ("│ " + _pad(label, WY) + " │ "
+                + " │ ".join(_pad(v, WV, ">") for v in vals) + " │")
+
+    def hrow(label, *vals):
+        return ("│ " + _pad(label, WY) + " │ "
+                + " │ ".join(_pad(v, WV, "^") for v in vals) + " │")
+
+    TOTAL = 4 + WY + (WV + 3) * len(results)
+    print(f"\n\n{'═' * TOTAL}")
+    print(f"  연도별 손익 분해  (당일 체결 · 앙상블 평균)")
+    print(f"{'═' * TOTAL}")
+    print(hline("┌", "┬", "┐"))
+    print(hrow("연도", *[r["name"].split("(")[0].strip()[:WV] for r in results]))
+    print(hline("├", "┼", "┤"))
+    for yr in years:
+        yr_dates = [d for d in dates if d[:4] == yr]
+        vals = []
+        for res in results:
+            eq = res["equity_same"]
+            idx = {d: i for i, d in enumerate(dates)}
+            i0 = idx.get(yr_dates[0],  0)
+            i1 = idx.get(yr_dates[-1], len(dates) - 1)
+            pnl = 100 * (eq[i1 + 1] - eq[i0])
+            vals.append(f"{pnl:+.2f} %p")
+        print(row(yr, *vals))
+    print(hline("└", "┴", "┘"))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -193,7 +231,7 @@ def main():
     plot_term_structure(rows, out_dir)
 
     base = Params(z_exit=0.3, max_hold=15, rehedge=True, cost_iv_pt=0.5,
-                  stop_dz=2.0, stop_loss_pct=5.0)
+                  stop_dz=None, stop_loss_pct=5.0, min_vrp_entry=1.0)
     strategies = [
         ("VRP 전략 (Short/Long ATM 스트래들, 양방향)",  "04_VRP_양방향",   vrp_builder),
         ("Short Volatility 전략 (VRP 수취, 매도 전용)", "05_Short_Vol",    shortvol_builder),
@@ -210,6 +248,7 @@ def main():
               f"  Sharpe {res['metrics_same']['sharpe']:+.3f}")
 
     print_comparison(results)
+    print_yearly(results, dates)
 
     print("\n[그림 4-7] 전략별 손익 곡선 저장 중...")
     plot_strategy_equity(results, dates, out_dir)
