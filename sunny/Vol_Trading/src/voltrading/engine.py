@@ -75,6 +75,7 @@ def run_engine(dates, rows_by_date, z, smiles_by_day,
         hedge = {e: -d for e, d in d0.items()}
         cum_hedge, prev_total, prev_exit_adj = 0.0, 0.0, 0.0
         last_day, j, exited = day0, i, False
+        z_stop = pnl_stop = False
         while j + 1 < n and (j - i) < p.max_hold:
             j += 1
             dj  = dates[j]
@@ -89,10 +90,16 @@ def run_engine(dates, rows_by_date, z, smiles_by_day,
             cum_hedge += sum(hedge[e] * (fs[e] - prev_f[e]) for e in hedge)
             total_mid  = v_mid - v_entry + cum_hedge
             zj = z[j]
-            stopped = (
-                p.stop_dz is not None and zj is not None and z[sig_i] is not None
+            z_stop = (
+                p.stop_dz is not None
+                and zj is not None and z[sig_i] is not None
                 and (zj if z[sig_i] > 0 else -zj) >= abs(z[sig_i]) + p.stop_dz
             )
+            pnl_stop = (
+                p.stop_loss_pct is not None
+                and total_mid / base < -(p.stop_loss_pct / 100)
+            )
+            stopped = z_stop or pnl_stop
             if (zj is not None and abs(zj) < p.z_exit) or (j - i) >= p.max_hold or stopped:
                 ex    = _price_legs(legs, smiles_by_day[dj], "exit", p.cost_iv_pt)
                 v_ex  = ex[0] if ex else v_mid
@@ -111,8 +118,9 @@ def run_engine(dates, rows_by_date, z, smiles_by_day,
         if not exited:
             daily[last_day] += prev_exit_adj / base
             prev_total      += prev_exit_adj
+        exit_cause = "STOP_Z" if z_stop else ("STOP_PNL" if pnl_stop else "NORMAL")
         trades.append(prev_total / base)
-        detail.append((day0, dates[min(j, n - 1)], tag, prev_total / base, j - i))
+        detail.append((day0, dates[min(j, n - 1)], tag, prev_total / base, j - i, exit_cause))
         i = j + 1
     return BacktestResult(dict(daily), trades, detail)
 
