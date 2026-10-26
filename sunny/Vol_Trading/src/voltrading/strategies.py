@@ -26,14 +26,21 @@ def _dte_mult(dte: int) -> float:
     return C.DTE_TAPER_FLOOR + (1.0 - C.DTE_TAPER_FLOOR) * max(0.0, min(1.0, frac))
 
 
-def vrp_builder(zi, row, smiles):
+def vrp_builder(zi, row, smiles, params=None):
     """VRP 전략 빌더.
 
     z > 0 → IV 고평가 → ATM 스트래들 매도 (Short Volatility, VRP 수취)
     z < 0 → IV 저평가 → ATM 스트래들 매수 (Long Volatility, 위기 헤지)
 
+    params.min_vrp_entry: Short Vol 진입 시 절대 VRP 최소값 필터.
     베가 정규화: TARGET_VEGA_UNIT 기준으로 수량 조정.
     """
+    vrp = row.get("vrp")
+    if params is not None and params.min_vrp_entry > 0:
+        if zi > 0 and (vrp is None or vrp < params.min_vrp_entry):
+            return None   # Short Vol: 절대 VRP가 기준 미달이면 진입 안 함
+        if zi < 0 and (vrp is None or vrp > -params.min_vrp_entry):
+            return None   # Long Vol: 절대 VRP가 충분히 음수가 아니면 진입 안 함
     expiry = row["near_expiry"]
     sm = smiles.get(expiry)
     if sm is None or sm.days < C.MIN_ENTRY_DTE:
@@ -58,7 +65,7 @@ def vrp_builder(zi, row, smiles):
     return legs, F0, tag
 
 
-def longvol_builder(zi, row, smiles):
+def longvol_builder(zi, row, smiles, params=None):
     """Long Volatility 전용 빌더.
 
     z < -threshold → IV 저렴 → ATM 스트래들 매수만 허용.
@@ -66,6 +73,10 @@ def longvol_builder(zi, row, smiles):
     """
     if zi >= 0:          # 음수(IV 저렴)일 때만 진입
         return None
+    vrp = row.get("vrp")
+    if params is not None and params.min_vrp_entry > 0:
+        if vrp is None or vrp > -params.min_vrp_entry:
+            return None  # 절대 VRP가 충분히 음수가 아니면 진입 안 함
     expiry = row["near_expiry"]
     sm = smiles.get(expiry)
     if sm is None or sm.days < C.MIN_ENTRY_DTE:
@@ -88,7 +99,7 @@ def longvol_builder(zi, row, smiles):
     return legs, F0, "LONG_STRADDLE_ONLY"
 
 
-def shortvol_builder(zi, row, smiles):
+def shortvol_builder(zi, row, smiles, params=None):
     """Short Volatility 전용 빌더.
 
     z > +threshold → IV 비쌈 → ATM 스트래들 매도만 허용.
@@ -96,6 +107,10 @@ def shortvol_builder(zi, row, smiles):
     """
     if zi <= 0:          # 양수(IV 비쌈)일 때만 진입
         return None
+    vrp = row.get("vrp")
+    if params is not None and params.min_vrp_entry > 0:
+        if vrp is None or vrp < params.min_vrp_entry:
+            return None  # 절대 VRP가 기준 미달이면 진입 안 함
     expiry = row["near_expiry"]
     sm = smiles.get(expiry)
     if sm is None or sm.days < C.MIN_ENTRY_DTE:
