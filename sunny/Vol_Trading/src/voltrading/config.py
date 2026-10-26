@@ -39,5 +39,6 @@ class Params:
     entry_lag:     int   = 0      # 0=당일 종가 체결, 1=익일 종가 체결
     rehedge:       bool  = True   # True=매일 델타 재헤지
     cost_iv_pt:    float = 0.5    # 레그당 체결 IV 비용 (포인트)
-    stop_dz:       Optional[float] = 2.0   # z-score 손절: 진입 z 대비 이만큼 더 불리해지면 청산
+    stop_dz:       Optional[float] = None  # z-score 손절 (Short Vol에선 역효과 — 기본 비활성)
     stop_loss_pct: Optional[float] = 5.0   # PnL 손절: 진입가 대비 -X% 초과 손실 시 청산
+    min_vrp_entry: float           = 0.0   # Short Vol 진입 최소 절대 VRP (%p). 음수=비활성
