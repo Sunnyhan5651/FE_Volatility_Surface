@@ -62,7 +62,7 @@ def run_engine(dates, rows_by_date, z, smiles_by_day,
         if i >= n:
             break
         day0  = dates[i]
-        built = builder(z[sig_i], rows_by_date[day0], smiles_by_day[day0])
+        built = builder(z[sig_i], rows_by_date[day0], smiles_by_day[day0], p)
         if built is None:
             i = sig_i + 1
             continue
